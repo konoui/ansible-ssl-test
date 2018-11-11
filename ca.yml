@@ -1,5 +1,4 @@
 - hosts: ca
   sudo: yes
-  remote_user: "ec2-user"
   roles:
     - ca

@@ -1,2 +1,8 @@
 ---
 # defaults file for ca
+ca_dir: /etc/pki/CA
+private_dir: private
+ca_key: ca_key.pem
+ca_cert_csr: ca_cert.csr
+ca_cert_pem: ca_cert.pem
+ca_cert_der: ca_cert.der

@@ -13,3 +13,5 @@ ca_organization_name: hoge
 ca_organization_unit_name: hoge
 
 ca_state_or_province_name: Tokyo
+
+local_download_dir: ~/Downloads/
