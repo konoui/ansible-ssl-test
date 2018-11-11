@@ -1,1 +1,3 @@
 - include: ca.yml
+- include: csr.yml
+- include: ca.yml

@@ -1,6 +1,11 @@
 [ca]
 127.0.0.1
 
+[csr]
+target01 ansible_host=127.0.0.1
+
+
+
 [all:vars]
 ansible_connection=ssh
 ansible_user=vagrant

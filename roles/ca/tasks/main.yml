@@ -27,7 +27,7 @@
 
 - name: create ca private key
   openssl_privatekey:
-    path: "{{ ca_dir }}/{{ private_dir }}/{{ ca_key }}"
+    path: "{{ abs_ca_key }}"
     state: present
 
 - name: create csr
@@ -38,25 +38,25 @@
     localityName: "{{ ca_locality_name }}"
     organizationName: "{{ ca_organization_name }}"
     organizationalUnitName: "{{ ca_organization_unit_name }}"
-    privatekey_path: "{{ ca_dir }}/{{ private_dir }}/{{ ca_key }}"
+    privatekey_path: "{{ abs_ca_key }}"
     stateOrProvinceName: "{{ ca_state_or_province_name }}"
-    path: "{{ ca_dir }}/{{ ca_cert_csr }}"
+    path: "{{ abs_ca_cert_csr }}"
     state: present
 
 
 - name: create self signed certificate
   openssl_certificate:
-    csr_path: "{{ ca_dir }}/{{ ca_cert_csr }}"
-    privatekey_path: "{{ ca_dir }}/{{ private_dir }}/{{ ca_key }}"
+    csr_path: "{{ abs_ca_cert_csr }}"
+    privatekey_path: "{{ abs_ca_key }}"
     provider: selfsigned
     valid_in: 315360000
-    path: "{{ ca_dir }}/{{ ca_cert_pem }}"
+    path: "{{ abs_ca_cert_pem }}"
     state: present
 
 - name: convert CA certificate to DER
-  shell: "openssl x509 -inform PEM -outform DER -in {{ ca_dir }}/{{ ca_cert_pem }} -out {{ ca_dir }}/{{ ca_cert_der }}"
+  shell: "openssl x509 -inform PEM -outform DER -in {{ abs_ca_cert_pem }} -out {{ abs_ca_cert_der }}"
   args:
-    creates: "{{ ca_dir }}/{{ ca_cert_der }}"
+    creates: "{{ abs_ca_cert_der }}"
 
 - name: create index file
   file:
@@ -70,7 +70,49 @@
 
 - name: download CA certificate
   fetch:
-    src: "{{ ca_dir }}/{{ ca_cert_der }}"
-    dest: "{{ local_download_dir }}/{{ ca_cert_der }}"
+    src: "{{ abs_ca_cert_der }}"
+    dest: "{{ local_store_dir }}/{{ ca_cert_der }}"
     fail_on_missing: yes
     flat: yes
+
+
+# signed csrs
+- name: create csr store
+  file:
+    mode: 0664
+    path: "{{ ca_csr_store_dir }}"
+    state: directory
+
+- name: Check if remote csrs exists
+  stat:
+    path: "{{ ca_csr_store_dir }}/{{ item }}.csr"
+  with_items: "{{ groups['csr'] }}"
+  register: existence
+  tags: checkfiles
+
+- name: copy local csrs to remote ca
+  copy:
+    src: "{{ local_store_dir }}/{{ item.item }}.csr"
+    dest: "{{ ca_csr_store_dir }}/{{ item.item }}.csr"
+  when: item.stat.exists == False
+  with_items: "{{ existence.results }}"
+
+- name: create certificates signed by ca
+  openssl_certificate:
+    csr_path: "{{ ca_csr_store_dir }}/{{ item.item }}.csr"
+    privatekey_path: "{{ abs_ca_key }}"
+    provider: selfsigned
+    valid_in: 315360000
+    path: "{{ ca_csr_store_dir }}/{{ item.item }}.cert.pem"
+    state: present
+  when: item.stat.exists
+  with_items: "{{ existence.results }}"
+
+- name: download certificates to local
+  fetch:
+    src: "{{ ca_csr_store_dir }}/{{ item.item }}.cert.pem"
+    dest: "{{ local_store_dir }}/{{ item.item }}.cert.pem"
+    fail_on_missing: yes
+    flat: yes
+  when: item.stat.exists
+  with_items: "{{ existence.results }}"

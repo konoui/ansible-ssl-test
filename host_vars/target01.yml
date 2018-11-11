@@ -1,0 +1,15 @@
+---
+# vars file for ansible
+common_name: hoge.hogehoge.hoge
+
+country_name: JP
+
+email: hogehoge@hogehoge.hoge
+
+locality_name: hoge
+
+organization_name: hoge
+
+organization_unit_name: hoge
+
+state_or_province_name: Tokyo
