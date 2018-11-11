@@ -1,0 +1,75 @@
+---
+# tasks file for ansible
+- name: install openssl
+  package:
+    name: openssl, python
+    state: latest
+
+- name: install pip
+  shell: which pip
+  failed_when: result.rc < 0
+  register: result
+
+- block:
+  - name: download get-pip.py
+    get_url:
+      dest: ~/get-pip.py
+      url: https://bootstrap.pypa.io/get-pip.py
+  - name: install pip
+    shell: python ~/get-pip.py
+  when: result.rc == 1
+
+- name: install pyOpenSSL
+  pip:
+    name: pyOpenSSL
+    state: present
+
+- name: create ca private key
+  openssl_privatekey:
+    path: /etc/pki/CA/private/cakey.pem
+    state: present
+
+- name: create csr
+  openssl_csr:
+    commonName: "{{ ca_common_name }}"
+    countryName: "{{ ca_country_name }}"
+    emailAddress: "{{ ca_email }}"
+    localityName: "{{ ca_locality_name }}"
+    organizationName: "{{ ca_organization_name }}"
+    organizationalUnitName: "{{ ca_organization_unit_name }}"
+    path: /etc/pki/CA/cacert.csr
+    privatekey_path: /etc/pki/CA/private/cakey.pem
+    state: present
+    stateOrProvinceName: "{{ ca_state_or_province_name }}"
+
+- name: create self signed certificate
+  openssl_certificate:
+    csr_path: /etc/pki/CA/cacert.csr
+    path: /etc/pki/CA/cacert.pem
+    privatekey_path: /etc/pki/CA/private/cakey.pem
+    provider: selfsigned
+    state: present
+    valid_in: 315360000
+
+# TODO change ca_cert.der to valiable
+- name: convert CA certificate to DER
+  shell: openssl x509 -inform PEM -outform DER -in /etc/pki/CA/cacert.pem -out /etc/pki/CA/ca_cert.der
+  args:
+    creates: /etc/pki/CA/ca_cert.der
+
+- name: create index file
+  file:
+    path: /etc/pki/CA/index.txt
+    state: touch
+
+- name: create serial file
+  shell: echo "01" > /etc/pki/CA/serial
+  args:
+    creates: /etc/pki/CA/serial
+
+- name: download CA certificate
+  fetch:
+    src: "/etc/pki/CA/ca_cert.der"
+    dest: "{{ local_store_dir }}/ca_cert.der"
+    fail_on_missing: yes
+    flat: yes
