@@ -1,14 +1,15 @@
 ---
 # tasks file for ansible
-- name: install openssl
+- name: install openssl and python
   package:
     name: openssl, python
     state: latest
 
-- name: install pip
+- name: ensure pip
   shell: which pip
-  failed_when: result.rc < 0
+  # ignore an error for next block
   register: result
+  failed_when: result.rc < 0
 
 - block:
   - name: download get-pip.py
@@ -17,14 +18,13 @@
       url: https://bootstrap.pypa.io/get-pip.py
   - name: install pip
     shell: python ~/get-pip.py
-  when: result.rc == 1
+  when: result.rc > 0
 
 - name: install pyOpenSSL
   pip:
     name: pyOpenSSL
     state: present
 
-# TODO change cakey, casert, ca_cert.der to valiable
 - name: create ca private key
   openssl_privatekey:
     path: "{{ ca_dir }}/{{ private_dir }}/{{ ca_key }}"
