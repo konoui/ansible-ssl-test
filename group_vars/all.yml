@@ -1,5 +1,5 @@
 ---
 # vars file for ansible
-local_store_dir: ~/Downloads/
+local_store_dir: ./tmp
 remote_store_dir: /etc/pki/certificates
 ca_csr_store_dir: /etc/pki/csrs

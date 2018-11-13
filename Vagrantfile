@@ -14,6 +14,10 @@ Vagrant.configure("2") do |config|
       vb.customize ["modifyvm", :id, "--usbehci", "off"]
   end
 
+  # for web server
+  config.vm.network "forwarded_port", guest: 80, host: 10080, auto_correct: true   # HTTP
+  config.vm.network "forwarded_port", guest: 443, host: 10443, auto_correct: true  # HTTPS
+
   config.vm.provision "ansible" do |ansible|
     ansible.verbose = "v"
     ansible.playbook = "site.yml"

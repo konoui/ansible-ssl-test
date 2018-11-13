@@ -32,7 +32,7 @@
     path: "{{ remote_store_dir }}"
     state: directory
 
-- name: ensure created target hosts private key
+- name: create private key
   openssl_privatekey:
     path: "{{ remote_store_dir }}/{{ inventory_hostname }}_key.pem"
     state: present
@@ -51,9 +51,16 @@
     state: present
 
 
-- name: ensure fetch csr file
+- name: download csrs
   fetch:
     src: "{{ remote_store_dir }}/{{ inventory_hostname }}.csr"
     dest: "{{ local_store_dir }}/{{ inventory_hostname }}.csr"
+    fail_on_missing: yes
+    flat: yes
+
+- name: download private keys
+  fetch:
+    src: "{{ remote_store_dir }}/{{ inventory_hostname }}_key.pem"
+    dest: "{{ local_store_dir }}/{{ inventory_hostname }}_key.pem"
     fail_on_missing: yes
     flat: yes

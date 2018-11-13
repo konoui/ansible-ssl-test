@@ -1,5 +1,6 @@
 ---
 # tasks file for ansible
+## Step 0 Common pacakges
 - name: install openssl and python
   package:
     name: openssl, python
@@ -25,10 +26,13 @@
     name: pyOpenSSL
     state: present
 
+
+## Step 1 Create CA
 - name: create ca private key
   openssl_privatekey:
     path: "{{ abs_ca_key }}"
     state: present
+  tags: CreateCA
 
 - name: create csr
   openssl_csr:
@@ -42,6 +46,7 @@
     stateOrProvinceName: "{{ ca_state_or_province_name }}"
     path: "{{ abs_ca_cert_csr }}"
     state: present
+  tags: CreateCA
 
 
 - name: create self signed certificate
@@ -52,21 +57,25 @@
     valid_in: 315360000
     path: "{{ abs_ca_cert_pem }}"
     state: present
+  tags: CreateCA
 
 - name: convert CA certificate to DER
   shell: "openssl x509 -inform PEM -outform DER -in {{ abs_ca_cert_pem }} -out {{ abs_ca_cert_der }}"
   args:
     creates: "{{ abs_ca_cert_der }}"
+  tags: CreateCA
 
 - name: create index file
   file:
     path: "{{ ca_dir }}/index.txt"
     state: touch
+  tags: CreateCA
 
 - name: create serial file
   shell: "echo '01' > {{ ca_dir }}/serial"
   args:
     creates: "{{ ca_dir }}/serial"
+  tags: CreateCA
 
 - name: download CA certificate
   fetch:
@@ -74,45 +83,89 @@
     dest: "{{ local_store_dir }}/{{ ca_cert_der }}"
     fail_on_missing: yes
     flat: yes
+  tags: CreateCA
 
 
-# signed csrs
+# Step 2 Generate csrs for server or client
+- name: ensure store fir exist
+  file:
+    mode: 0664
+    path: "{{ remote_store_dir }}"
+    state: directory
+
+- name: create private key
+  openssl_privatekey:
+    path: "{{ remote_store_dir }}/{{ inventory_hostname }}_key.pem"
+    state: present
+
+- name: create csr
+  openssl_csr:
+    commonName: "{{ common_name }}"
+    countryName: "{{ country_name }}"
+    emailAddress: "{{ email }}"
+    localityName: "{{ locality_name }}"
+    organizationName: "{{ organization_name }}"
+    organizationalUnitName: "{{ organization_unit_name }}"
+    stateOrProvinceName: "{{ state_or_province_name }}"
+    privatekey_path: "{{ remote_store_dir }}/{{ inventory_hostname }}_key.pem"
+    path: "{{ remote_store_dir }}/{{ inventory_hostname }}.csr"
+    state: present
+
+# TEST
+- name: download csrs
+  fetch:
+    src: "{{ remote_store_dir }}/{{ inventory_hostname }}.csr"
+    dest: "{{ local_store_dir }}/{{ inventory_hostname }}.csr"
+    fail_on_missing: yes
+    flat: yes
+
+- name: download private keys
+  fetch:
+    src: "{{ remote_store_dir }}/{{ inventory_hostname }}_key.pem"
+    dest: "{{ local_store_dir }}/{{ inventory_hostname }}_key.pem"
+    fail_on_missing: yes
+    flat: yes
+
+
+## Step 3 Sign csrs by ca private key
 - name: create csr store
   file:
     mode: 0664
     path: "{{ ca_csr_store_dir }}"
     state: directory
+  tags: SignCertificateByCaKey
 
-- name: Check if remote csrs exists
-  stat:
-    path: "{{ ca_csr_store_dir }}/{{ item }}.csr"
-  with_items: "{{ groups['csr'] }}"
-  register: existence
-  tags: checkfiles
-
+# TEST
 - name: copy local csrs to remote ca
   copy:
-    src: "{{ local_store_dir }}/{{ item.item }}.csr"
-    dest: "{{ ca_csr_store_dir }}/{{ item.item }}.csr"
-  when: item.stat.exists == False
-  with_items: "{{ existence.results }}"
-
+    src: "{{ local_store_dir }}/{{ inventory_hostname }}.csr"
+    dest: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.csr"
+    force: yes
+  tags: SignCertificateByCaKey
 - name: create certificates signed by ca
   openssl_certificate:
-    csr_path: "{{ ca_csr_store_dir }}/{{ item.item }}.csr"
+    csr_path: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.csr"
     privatekey_path: "{{ abs_ca_key }}"
     provider: selfsigned
     valid_in: 315360000
-    path: "{{ ca_csr_store_dir }}/{{ item.item }}.cert.pem"
+    path: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.cert.pem"
     state: present
-  when: item.stat.exists
-  with_items: "{{ existence.results }}"
+  tags: SignCertificateByCaKey
+
+# - name: create certificates signed by ca
+#   openssl_certificate:
+#     csr_path: "{{ remote_store_dir }}/{{ inventory_hostname }}.csr"
+#     privatekey_path: "{{ abs_ca_key }}"
+#     provider: selfsigned
+#     valid_in: 315360000
+#     path: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.cert.pem"
+#     state: present
+#   tags: SignCertificateByCaKey
 
 - name: download certificates to local
   fetch:
-    src: "{{ ca_csr_store_dir }}/{{ item.item }}.cert.pem"
-    dest: "{{ local_store_dir }}/{{ item.item }}.cert.pem"
+    src: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.cert.pem"
+    dest: "{{ local_store_dir }}/{{ inventory_hostname }}.cert.pem"
     fail_on_missing: yes
     flat: yes
-  when: item.stat.exists
-  with_items: "{{ existence.results }}"
+  tags: SignCertificateByCaKey
