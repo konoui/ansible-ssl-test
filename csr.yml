@@ -1,4 +1,0 @@
-- hosts: csr
-  sudo: yes
-  roles:
-    - csr
