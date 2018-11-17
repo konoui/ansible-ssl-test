@@ -1,0 +1,4 @@
+- hosts: apache
+  sudo: yes
+  roles:
+    - apache

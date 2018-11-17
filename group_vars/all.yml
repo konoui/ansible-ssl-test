@@ -3,3 +3,8 @@
 local_store_dir: ./tmp
 remote_store_dir: /etc/pki/certificates
 ca_csr_store_dir: /etc/pki/csrs
+
+ca_dir: /etc/pki/CA
+certs_dir: certs
+ca_cert_pem: ca_cert.pem
+abs_ca_cert_pem: "{{ ca_dir }}/{{ certs_dir }}/{{ ca_cert_pem }}"

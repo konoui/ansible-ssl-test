@@ -1,0 +1,29 @@
+---
+# tasks file for apache
+- name: install apache
+  yum:
+    name: httpd
+    state: present
+  notify: restart apache
+
+- name: start apache
+  service:
+    name: httpd
+    state: started
+    enabled: yes
+
+- name: enable ssl client authentication
+  lineinfile:
+    dest: '/etc/httpd/conf.d/ssl.conf'
+    state: present
+    backrefs: yes
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - regexp: '^#?\s*SSLCACertificateFile'
+      line: "SSLCACertificateFile {{ abs_ca_cert_pem }}"
+    - regexp: '^#?\s*SSLVerifyClient'
+      line: "SSLVerifyClient require"
+    - regexp: '^#?\s*SSLVerifyDepth'
+      line: "SSLVerifyDepth  10"
+  notify: restart apache

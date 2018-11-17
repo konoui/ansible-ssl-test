@@ -1,9 +1,8 @@
 [ca]
 target01 ansible_host=127.0.0.1
 
-[csr]
+[apache]
 target01 ansible_host=127.0.0.1
-
 
 
 [all:vars]
