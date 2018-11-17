@@ -18,8 +18,11 @@ Vagrant.configure("2") do |config|
   config.vm.network "forwarded_port", guest: 80, host: 10080, auto_correct: true   # HTTP
   config.vm.network "forwarded_port", guest: 443, host: 10443, auto_correct: true  # HTTPS
 
-  config.vm.provision "ansible" do |ansible|
+  config.vm.provision "ansible_local" do |ansible|
     ansible.verbose = "v"
+    ansible.install_mode = "pip"
+    ansible.compatibility_mode = "auto"
+    ansible.version = "latest"
     ansible.playbook = "site.yml"
     ansible.inventory_path = "vagrant"
     ansible.limit = 'all'

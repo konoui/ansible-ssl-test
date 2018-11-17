@@ -12,3 +12,5 @@ abs_ca_key: "{{ ca_dir }}/{{ private_dir }}/{{ ca_key }}"
 abs_ca_cert_csr: "{{ ca_dir }}/{{ certs_dir }}/{{ ca_cert_csr }}"
 abs_ca_cert_pem: "{{ ca_dir }}/{{ certs_dir }}/{{ ca_cert_pem }}"
 abs_ca_cert_der: "{{ ca_dir }}/{{ certs_dir }}/{{ ca_cert_der }}"
+
+key_size: 2048

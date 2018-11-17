@@ -8,6 +8,7 @@
 
 - name: ensure pip
   shell: which pip
+  changed_when: False
   # ignore an error for next block
   register: result
   failed_when: result.rc < 0
@@ -30,11 +31,13 @@
 ## Step 1 Create CA
 - name: create ca private key
   openssl_privatekey:
+    size: "{{ key_size }}"
+    type: RSA
     path: "{{ abs_ca_key }}"
     state: present
   tags: CreateCA
 
-- name: create csr
+- name: create csr for CA
   openssl_csr:
     commonName: "{{ ca_common_name }}"
     countryName: "{{ ca_country_name }}"
@@ -42,12 +45,18 @@
     localityName: "{{ ca_locality_name }}"
     organizationName: "{{ ca_organization_name }}"
     organizationalUnitName: "{{ ca_organization_unit_name }}"
-    privatekey_path: "{{ abs_ca_key }}"
     stateOrProvinceName: "{{ ca_state_or_province_name }}"
+    privatekey_path: "{{ abs_ca_key }}"
+    digest: sha256
+    basic_constraints: "CA:true" # csr for CA
+    key_usage:
+      - keyCertSign
+      - cRLSign
+      - digitalSignature
+    key_usage_critical: true
     path: "{{ abs_ca_cert_csr }}"
     state: present
   tags: CreateCA
-
 
 - name: create self signed certificate
   openssl_certificate:
@@ -55,14 +64,14 @@
     privatekey_path: "{{ abs_ca_key }}"
     provider: selfsigned
     valid_in: 315360000
+    selfsigned_digest: sha256
+    key_usage:
+      - keyCertSign
+      - cRLSign
+      - digitalSignature
+    key_usage_strict: true
     path: "{{ abs_ca_cert_pem }}"
     state: present
-  tags: CreateCA
-
-- name: convert CA certificate to DER
-  shell: "openssl x509 -inform PEM -outform DER -in {{ abs_ca_cert_pem }} -out {{ abs_ca_cert_der }}"
-  args:
-    creates: "{{ abs_ca_cert_der }}"
   tags: CreateCA
 
 - name: create index file
@@ -79,8 +88,8 @@
 
 - name: download CA certificate
   fetch:
-    src: "{{ abs_ca_cert_der }}"
-    dest: "{{ local_store_dir }}/{{ ca_cert_der }}"
+    src: "{{ abs_ca_cert_pem }}"
+    dest: "{{ local_store_dir }}/{{ ca_cert_pem }}"
     fail_on_missing: yes
     flat: yes
   tags: CreateCA
@@ -92,11 +101,15 @@
     mode: 0664
     path: "{{ remote_store_dir }}"
     state: directory
+  tags: "CreateCSRForServerClient"
 
 - name: create private key
   openssl_privatekey:
+    size: "{{ key_size }}"
+    type: RSA
     path: "{{ remote_store_dir }}/{{ inventory_hostname }}_key.pem"
     state: present
+  tags: "GenerateCSRForServerClient"
 
 - name: create csr
   openssl_csr:
@@ -108,16 +121,23 @@
     organizationalUnitName: "{{ organization_unit_name }}"
     stateOrProvinceName: "{{ state_or_province_name }}"
     privatekey_path: "{{ remote_store_dir }}/{{ inventory_hostname }}_key.pem"
+    digest: sha256
+    basic_constraints: "CA:false"
+    extended_key_usage:
+      - clientAuth
+      - serverAuth
+    extended_key_usage_critical: true
     path: "{{ remote_store_dir }}/{{ inventory_hostname }}.csr"
     state: present
+  tags: "GenerateCSRForServerClient"
 
-# TEST
 - name: download csrs
   fetch:
     src: "{{ remote_store_dir }}/{{ inventory_hostname }}.csr"
     dest: "{{ local_store_dir }}/{{ inventory_hostname }}.csr"
     fail_on_missing: yes
     flat: yes
+  tags: "GenerateCSRForServerClient"
 
 - name: download private keys
   fetch:
@@ -125,6 +145,7 @@
     dest: "{{ local_store_dir }}/{{ inventory_hostname }}_key.pem"
     fail_on_missing: yes
     flat: yes
+  tags: "GenerateCSRForServerClient"
 
 
 ## Step 3 Sign csrs by ca private key
@@ -135,32 +156,27 @@
     state: directory
   tags: SignCertificateByCaKey
 
-# TEST
 - name: copy local csrs to remote ca
   copy:
     src: "{{ local_store_dir }}/{{ inventory_hostname }}.csr"
     dest: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.csr"
     force: yes
   tags: SignCertificateByCaKey
+
 - name: create certificates signed by ca
   openssl_certificate:
     csr_path: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.csr"
-    privatekey_path: "{{ abs_ca_key }}"
-    provider: selfsigned
+    ownca_path: "{{ abs_ca_cert_pem }}"
+    ownca_privatekey_path: "{{ abs_ca_key }}"
+    provider: ownca
     valid_in: 315360000
+    extended_key_usage:
+      - clientAuth
+      - serverAuth
+    extended_key_usage_strict: true
     path: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.cert.pem"
     state: present
   tags: SignCertificateByCaKey
-
-# - name: create certificates signed by ca
-#   openssl_certificate:
-#     csr_path: "{{ remote_store_dir }}/{{ inventory_hostname }}.csr"
-#     privatekey_path: "{{ abs_ca_key }}"
-#     provider: selfsigned
-#     valid_in: 315360000
-#     path: "{{ ca_csr_store_dir }}/{{ inventory_hostname }}.cert.pem"
-#     state: present
-#   tags: SignCertificateByCaKey
 
 - name: download certificates to local
   fetch:
